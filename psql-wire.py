@@ -4,6 +4,7 @@ import SocketServer
 import struct
 import threading
 import time
+import psycopg2
 
 def char_to_hex(char):
     retval = hex(ord(char))
@@ -25,23 +26,27 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         self.read_StartupMessage()
 #        self.send_AuthenticationClearText()
 #        self.read_PasswordMessage()
+        cn = psycopg2.connect('')
+        c = cn.cursor()
         self.send_AuthenticationOK()
         self.send_ParameterStatus('server_version','9.4')
         self.send_ReadyForQuery()
         Continue, Query = self.read_Query()
         while Continue:
-          self.send_queryresult()
-          Continue, Query = self.read_Query()
+            c.execute(Query)
+            if c.description:
+                self.send_queryresult([desc[0] for desc in c.description], c)
+            else:
+                self.send_queryresult([], [[]])
+            Continue, Query = self.read_Query()
         raise(SystemExit)
 
-    def send_queryresult(self):
-        fieldnames = ['Hi', 'Polla']
+    def send_queryresult(self, fieldnames, rows):
         HEADERFORMAT = "!cih"
         fields = ''.join(self.fieldname_msg(name) for name in fieldnames)
         rdheader = struct.pack(HEADERFORMAT, 'T', struct.calcsize(HEADERFORMAT) - 1 + len(fields), len(fieldnames))
         self.send_to_socket(rdheader + fields)
 
-        rows = [['You', 'are'], ['an', 'idjit...']]
         DRHEADER = "!cih"
         for row in rows:
             dr_data=''
