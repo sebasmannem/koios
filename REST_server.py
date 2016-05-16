@@ -1,32 +1,39 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # Found on http://www.dreamsyssoft.com/python-scripting-tutorial/create-simple-rest-web-service-with-python.php
 import web
-import xml.etree.ElementTree as ET
-
-tree = ET.parse('user_data.xml')
-root = tree.getroot()
+import json
+import psycopg2
 
 urls = (
-    '/users', 'list_users',
-    '/users/(.*)', 'get_user'
+    '/tables', 'list_tables',
+    '/tables/(.*)', 'get_table',
 )
 
-app = web.application(urls, globals())
-
-class list_users:        
+class list_tables:
     def GET(self):
-        output = 'users:[';
-        for child in root:
-                print 'child', child.tag, child.attrib
-                output += str(child.attrib) + ','
-        output += ']';
-        return output
+        c=psycopg2.connect("host='localhost' dbname='sabes'")
+        cur=c.cursor()
+        tables=[]
+        cur.execute('select schemaname, tablename from pg_tables')
+        for r in cur:
+            t={}
+            t['schema'] = r[0]
+            t['table'] = r[1]
+            tables.append(t)
+        web.header('Content-Type', 'application/json')
+        return json.dumps(tables)
 
-class get_user:
-    def GET(self, user):
-        for child in root:
-                if child.attrib['id'] == user:
-                    return str(child.attrib)
+class get_table:
+    def GET(self, table):
+        c=psycopg2.connect("host='localhost' dbname='sabes'")
+        cur=c.cursor()
+        cur.execute('select * from '+table)
+        table=[]
+        for r in cur:
+            table.append(r)
+        web.header('Content-Type', 'application/json')
+        return json.dumps(table)
 
 if __name__ == "__main__":
+    app = web.application(urls, globals())
     app.run()
