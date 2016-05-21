@@ -3,10 +3,12 @@
 import web
 import json
 import psycopg2
+import uuid
 
 urls = (
     '/tables', 'list_tables',
 
+    '/sessions', 'sessions', 
     '/session/start', 'session_start',
     '/transaction/begin', 'transaction_begin',
 
@@ -19,6 +21,8 @@ urls = (
     '/transaction/rollback', 'transaction_rollback',
     '/session/close', 'session_close',
 )
+
+mySessions = {}
 
 def return_json(myDict):
     web.header('Content-Type', 'application/json')
@@ -37,20 +41,24 @@ class list_tables:
             tables.append(t)
         return return_json(tables)
 
+class sessions:
+    def GET(self):
+        return return_json(mySessions)
+
 class session_start:
     def GET(self):
         i=web.input()
-        print(i.globalsession)
-        ret={}
-        ret['sid'] = 1
-        return return_json(ret)
+        mySessionID = str(uuid.uuid4())
+        mySessions[mySessionID] = {'globalSession': i.globalsession }
+        return return_json(mySessionID)
 
 class transaction_begin:
     def GET(self):
-        ret={}
-        ret['sid'] = 3
-        ret['tid'] = 2
-        return return_json(ret)
+        i=web.input()
+        mytransID = str(uuid.uuid4())
+        mySession = mySessions[i.session]
+        mySession[transactions] += mytransID
+        return return_json(mytransID)
 
 class query_execute:
     def GET(self):
@@ -93,10 +101,10 @@ class transaction_commit:
 
 class session_close:
     def GET(self):
-        ret={}
-        ret['sid'] = 3
-        ret['tid'] = 2
-        return return_json(ret)
+        i=web.input()
+        myUUID = i.UUID
+        del mySessions[myUUID]
+        return return_json('OK')
 
 if __name__ == "__main__":
     app = web.application(urls, globals())
