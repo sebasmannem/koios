@@ -6,30 +6,27 @@ import psycopg2
 import uuid
 
 urls = (
-    '/tables', 'list_tables',
-
-    '/sessions', 'sessions', 
-    '/session/start', 'session_start',
-    '/transaction/begin', 'transaction_begin',
-
-    '/query/execute', 'query_execute',
-    '/query/getone', 'query_get_one_record',
-    '/query/getall', 'query_get_all_records',
-    '/query/rowcount', 'query_numrecords',
-
-    '/transaction/commit', 'transaction_commit',
-    '/transaction/rollback', 'transaction_rollback',
-    '/session/close', 'session_close',
+    '/db/(.*)', 'REST_db',
 )
 
 mySessions = {}
 
-def return_json(myDict):
-    web.header('Content-Type', 'application/json')
-    return json.dumps(myDict)
-
-class list_tables:
-    def GET(self):
+class REST_db:
+    def GET(self, sub):
+        sub=sub.split('/')
+        try:
+            methodToCall = getattr(self, sub[0])
+            ret=methodToCall(sub[1:])
+        except Exception as e:
+            print(e)
+            raise web.notfound()
+            return ""
+        web.header('Content-Type', 'application/json')
+        return json.dumps(ret)
+    def POST(self, sub):
+        web.header('Content-Type', 'application/json')
+        return json.dumps(tables)
+    def tables(self, sub):
         c=psycopg2.connect("host='localhost' dbname='sabes'")
         cur=c.cursor()
         tables=[]
@@ -39,43 +36,38 @@ class list_tables:
             t['schema'] = r[0]
             t['table'] = r[1]
             tables.append(t)
-        return return_json(tables)
-
-class sessions:
-    def GET(self):
-        return return_json(mySessions)
-
-class session_start:
-    def GET(self):
+        return tables
+    def session(self, sub):
         i=web.input()
-        mySessionID = str(uuid.uuid4())
-        mySessions[mySessionID] = {'globalSession': i.globalsession }
-        return return_json(mySessionID)
+        if sub[0] == 'open':
+            mySessionID = str(uuid.uuid4())
+            self.globalID = i.gid
+            mySessions[mySessionID] = self
+        elif sub[0] == 'close':
+            mySessionID = i.UUID
+            del mySessions[mySessionID]
+        else:
+            raise KeyError("Invalid REST call")
+        return mySessionID
 
-class transaction_begin:
-    def GET(self):
+    def transaction(self, sub):
         i=web.input()
-        mytransID = str(uuid.uuid4())
-        mySession = mySessions[i.session]
-        mySession[transactions] += mytransID
-        return return_json(mytransID)
+        if sub[0] == 'begin':
+            mySessionID = i.sid
+            mytransID = str(uuid.uuid4())
+            mySession = mySessions[i.session]
+            mySession[transactions] += mytransID
+        elif sub[0] == 'commit':
+            mytransID = i.tid
+        return mytransID
 
-class query_execute:
-    def GET(self):
+    def query_execute(self, sub):
         ret={}
         ret['sid'] = 3
         ret['tid'] = 2
-        return return_json(ret)
+        return ret
 
-class query_get_one_record:
-    def GET(self):
-        ret={}
-        ret['sid'] = 3
-        ret['tid'] = 2
-        return return_json(ret)
-
-class query_get_all_records:
-    def GET(self, table):
+    def query_get(self, sub):
         c=psycopg2.connect("host='localhost' dbname='sabes'")
         cur=c.cursor()
         cur.execute('select * from '+table)
@@ -83,28 +75,14 @@ class query_get_all_records:
         for r in cur:
             table.append(r)
         web.header('Content-Type', 'application/json')
-        return return_json(table)
+        return table
 
-class query_numrecords:
-    def GET(self):
+    def query_num(self, sub):
         ret={}
         ret['sid'] = 3
         ret['tid'] = 2
-        return return_json(ret)
+        return ret
 
-class transaction_commit:
-    def GET(self):
-        ret={}
-        ret['sid'] = 3
-        ret['tid'] = 2
-        return return_json(ret)
-
-class session_close:
-    def GET(self):
-        i=web.input()
-        myUUID = i.UUID
-        del mySessions[myUUID]
-        return return_json('OK')
 
 if __name__ == "__main__":
     app = web.application(urls, globals())
